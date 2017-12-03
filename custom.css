@@ -1,0 +1,30 @@
+﻿/*
+    Styles for the datepicker in the Request Offering Toolbox.
+	These are required so that the date picker matches the date time picker on the forms.
+*/
+body .k-datepicker .k-select {
+    border-radius: 0;
+}
+span.k-datepicker .k-select, span.k-datepicker .k-select+.k-select {
+    right: 0;
+}
+.defined-form .k-datepicker .k-select {
+    position: static;
+}
+.defined-form .k-datepicker .k-select span.k-icon {
+    margin: 3px 7px 0 0;
+    background-image: none;
+    overflow: visible;
+}
+.defined-form .k-datepicker .k-select span.k-icon.k-i-calendar:before {
+    content: "\f073";
+    font-family: FontAwesome;
+    font-size: 15px;
+    font-style: normal;
+    font-weight: normal;
+    text-decoration: inherit;
+    color: #008fd6;
+    position: absolute;
+    margin: 5px 0 0 -10px;
+}
+
