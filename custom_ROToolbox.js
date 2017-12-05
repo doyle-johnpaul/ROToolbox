@@ -117,14 +117,14 @@ function transformRO() {
             createMultiSelect("@MultiSelect", $(this))
         });
     }
+    $("p:contains('@DatePicker')").parent().parent().each(function() {
+		customDatePicker("@DatePicker", $(this))
+        });
     if (!($("div.custom-item-daterange").length)) {
         $("p:contains('@DateRange')").parent().parent().each(function() {
             createDateRange("@DateRange", $(this))
         });
     }
-    $("p:contains('@DatePicker')").parent().parent().each(function() {
-		customDatePicker("@DatePicker", $(this))
-        });
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
     });
@@ -195,6 +195,7 @@ function customDatePicker(tag, tagElement) {
 			window.setTimeout(replaceControl,50);
 		} else {
 			var originalDatetimepicker = formGroup.find(".k-datetimepicker");
+			inputElement.data("kendoDateTimePicker").destroy();
 			inputElement.detach().prependTo(formGroup);
 			originalDatetimepicker.remove();
 			var userInput = parseOptions(tag, tagElement);
@@ -203,6 +204,8 @@ function customDatePicker(tag, tagElement) {
 			userInput.Start = (userInput.Start) ? userInput.Start : null;
 			userInput.Interval = (userInput.Interval > 0) ? (userInput.Interval) : 15;
 			tbxDatePicker(inputElement,userInput);
+			var dateControl = formGroup.closest(".row.question-container");
+			dateControl.find("span.k-input").removeClass("k-input");
 			tagElement.remove();
 		}
 	}
@@ -370,10 +373,6 @@ function createDateRange(tag, tagElement) {
     var userDefined = parseOptions(tag, tagElement);
     var startDate = tagElement.next();
     var endDate = startDate.next();
-    tagElement.addClass("custom-item-daterange");
-    tagElement.html("<div class='col-md-4 col-xs-12 startdate'></div><div class='col-md-4 col-xs-12 enddate'></div>");
-    startDate.find("div.col-md-4").removeClass("col-md-4");
-    endDate.find("div.col-md-4").removeClass("col-md-4");
     function startChange() {
         var startDate = startDatePicker.value()
           , endDate = endDatePicker.value();
@@ -409,13 +408,18 @@ function createDateRange(tag, tagElement) {
     }
 
     var startDatePicker = startDate.find('input[data-control="dateTimePicker"]').data("kendoDateTimePicker");
+    if (_.isUndefined(startDatePicker)) {
+    	startDatePicker = startDate.find('input[data-control="dateTimePicker"]').data("kendoDatePicker");
+    }
     startDatePicker.bind("change", startChange);
     var endDatePicker = endDate.find('input[data-control="dateTimePicker"]').data("kendoDateTimePicker");
+    if (_.isUndefined(endDatePicker)) {
+    	endDatePicker = endDate.find('input[data-control="dateTimePicker"]').data("kendoDatePicker");
+    }
     endDatePicker.bind("change", endChange);
     startDatePicker.max(endDatePicker.value());
     endDatePicker.min(startDatePicker.value());
-    startDate.detach().appendTo(tagElement.find("div.startdate"));
-    endDate.detach().appendTo(tagElement.find("div.enddate"));
+    tagElement.remove();
 }
 
 function createAutoComplete(tag, tagElement) {
