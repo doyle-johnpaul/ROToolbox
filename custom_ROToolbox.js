@@ -85,6 +85,19 @@
       UTC: [true|false (default)] The selected date and time is sent back to the server in UTC. This is ideal in situations where you want to schedule something based on the value, or where you wish to store the value in a datetime field on the database.
       Interval: [integer] This value specifies the interval between values in the popup list in minutes.
       Start: ["month"|"year"|"decade"|"century"] Specifies the start view of the calendar. For example, when requesting a birth date, it would make sense to open the control with the century as the first view.
+	  
+   @QueryList
+   ----------
+   This tag replaces the data source of a Simple List prompt with a Dashboard query. This allows you to build a list from any data source which could be used as a source for the dashboards.
+   The following properties are available:
+		QueryId: (Required) This is the guid of the query saved on the Dashboard Query Settings page in the portal. The simplest way to find this value is to query the DataSource table in the ServiceManagement database.
+		Sort: The name of the field used to sort the data. The data will be sorted in ascending order based on the value in this field.
+		Default: The name of the field which contains a default flag. If one of the rows has a 1 in this field, that row will be used as the default. If this is not set, the code will look for a field called Default in the source.
+		Item: The field containing the content displayed to the user. If not specified the first field in the source data will be used.
+		Value: The field containing the value which will be submitted to the server.
+		ItemTemplate: A template which is applied to the elements in the dropdown list. Note: if you need to include # symbols in the template which are not limiters for the data substitutions then they must be escaped with a double backslash \\
+		ValueTemplate: A template which is applied to the selected item. This is simply for display on the form. It is not saved as the input value.
+
 */
 app.events.subscribe('sessionStorageReady',transformRO());
 app.events.subscribe('sessionStorageReady',transformRO);
@@ -125,6 +138,10 @@ function transformRO() {
             createDateRange("@DateRange", $(this))
         });
     }
+    $("p:contains('@QueryList')").parent().parent().each(function() {
+		buildQueryList("@QueryList", $(this))
+        });
+
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
     });
@@ -178,6 +195,73 @@ function applyLayoutTemplate (tag, tagElement) {
 		$(this).find("div.col-md-6").removeClass("col-md-6");
 		var newParent = tagElement.find("."+ctrlArray[index]);
 		$(this).detach().appendTo(newParent);
+	});
+};
+
+function buildQueryList(tag, tagElement) {
+	tagElement.hide();
+	var userDefined = parseOptions(tag, tagElement);
+	if (!userDefined.QueryId) {
+		tagElement.remove();
+		return;
+	}
+	var ddListRow = tagElement.next();
+	tagElement.remove();
+	var dataSource = new kendo.data.DataSource({
+		transport: {
+			read: {
+				url: "/api/v3/Dashboard/GetDashboardDataById/?queryId="+userDefined.QueryId+"&v="+(new Date().getTime()),
+				dataType: "json",
+				contentType: 'application/json; charset=utf-8'
+			}
+		},
+		sort: (userDefined.Sort) ? {field:userDefined.Sort, dir:"asc"} : {}
+	});
+	var ddListElement = ddListRow.find("input[data-control='inlineComboBox']");
+	var ddList = ddListElement.data("kendoDropDownList");
+
+	function isDefault(sourceData) {
+		var Default = (userDefined.Default) ? userDefined.Default : "Default";
+		return sourceData[Default] == 1;
+	}
+
+	dataSource.fetch(function(){
+		var data = this.data();
+		var keys = Object.keys(data[0]);
+		
+		var itemField = (userDefined.Item) ? userDefined.Item : (userDefined.Value) ? userDefined.Value :keys[2];
+		var valueField = (userDefined.Value) ? userDefined.Value : itemField;
+
+		ddList.setOptions({ dataTextField: itemField, dataValueField: valueField });
+		if (userDefined.ItemTemplate) {
+			ddList.setOptions({template: userDefined.ItemTemplate});
+		}
+		if (userDefined.ValueTemplate) {
+			ddList.setOptions({valueTemplate: userDefined.ValueTemplate});
+		}
+		var defaultValue = null;
+		var hiddenInput = null;
+		var valueTargetId = null;
+		if (userDefined.Default || (typeof data[0]["Default"] != "undefined")) {
+			 defaultValue = data.find(isDefault)[valueField];
+			 valueTargetId = ddListElement.attr("data-control-valuetargetid");
+			 hiddenInput = $("#"+valueTargetId);
+			 var ngModel = hiddenInput.attr("ng-model");
+			 hiddenInput.attr("ng-init", ngModel+"='"+ defaultValue +"'");
+			 hiddenInput.attr("data-default-value",defaultValue);
+		}
+		ddList.setDataSource(dataSource);
+        if (defaultValue) {
+        	ddList.value(defaultValue);
+        	hiddenInput.val(defaultValue);
+        }
+		var inputElem = ddListRow.find(".k-input");
+		if (inputElem.length > 0) {
+			var input = $(inputElem)[0];
+			var inputDefaultHolder = $(input).closest("div").find("input").last();
+			var defaultValue = $(inputDefaultHolder).attr('data-default-value') || null;
+			(input.nodeName.toLowerCase() == "span") ? $(input).html(defaultValue) : $(input).val(defaultValue);
+		}
 	});
 };
 
