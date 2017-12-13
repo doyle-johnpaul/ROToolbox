@@ -57,15 +57,21 @@
    ---------
    Required property: cssClass
    
-   @ShowHideCriteria
-   -----------------
+   @ShowHideCriteria / @ShowHideCriteria2
+   --------------------------------------
    Placed before any item (Except a Query Item), allows adding of an extra set of criteria for the following item,
    Criteria on this and the following Item are combined using a AND ('&&')
+
+   There are 2 Passes for these options, the first pass through only processes the @ShowHideCriteria and @ShowHideCriteriaOR
+   while the 2nd pass through processes the @ShowHideCriteria2 and @ShowHideCriteriaOR2
    
-   @ShowHideORCriteria
-   -----------------
+   @ShowHideCriteriaOR / @ShowHideCriteriaOR2
+   ------------------------------------------
    Placed before any item (Except a Query Item), allows adding of an extra set of criteria for the following item
    Criteria on this and the following Item are combined using a OR ('||')
+   
+   There are 2 Passes for these options, the first pass through only processes the @ShowHideCriteria and @ShowHideCriteriaOR
+   while the 2nd pass through processes the @ShowHideCriteria2 and @ShowHideCriteriaOR2
 
    @ToUpperCase and @ToLowerCase
    ------------
@@ -98,24 +104,46 @@
 		ItemTemplate: A template which is applied to the elements in the dropdown list. Note: if you need to include # symbols in the template which are not limiters for the data substitutions then they must be escaped with a double backslash \\
 		ValueTemplate: A template which is applied to the selected item. This is simply for display on the form. It is not saved as the input value.
 
+	@SingleLineEntry
+	----------------
+	Prvents the entry of a CR on a text area this entry is placed before
+	
+	@AddInformation
+	---------------
+	Adds either information to the page beside the next field, or adds a ? icon next to the field,
+	when adding the ? icon, and it is hovered over, the information will then be displayed
+	Examples :
+		Icon Mode :
+			@AddInformation {"icon":"&lt;p&gt;Text or formating here&lt;br&gt;even multiple lines&lt;/p&gt"}
+		Information Mode :
+			@AddInformation {"info":"&lt;p&gt;Text or formating here&lt;br&gt;even multiple lines&lt;/p&gt"}
+			
 */
 app.events.subscribe('sessionStorageReady',transformRO());
 app.events.subscribe('sessionStorageReady',transformRO);
 
+var DataMergeResults = [];
+
 function transformRO() {   
-    app.events.unsubscribe('drawerCreated',transformRO);
+    app.events.unsubscribe('sessionStorageReady',transformRO);
     app.lib.mask.apply();
+
+	$("p:contains('@SingleLineEntry')").parent().parent().each(function() {
+        forceSingleLineEntry("@SingleLineEntry", $(this))
+    });
     $("p:contains('@ConfirmFields')").parent().parent().each(function () {
       confirmFields($(this))
     });
     $("p:contains('@Placeholder')").parent().parent().each(function() {
         makePlaceholder("@Placeholder", $(this))
     });
-    $("p:contains('@ShowHideORCriteria')").parent().parent().each(function() {
-        addShowHideCriteria("@ShowHideORCriteria", $(this))
+	//@ShowHideCriteria Options need to be run through twice, so we call the same function twice
+    $("p:contains('@ShowHideCriteria')").each(function() {
+        addShowHideCriteria($(this).text(), $(this).parent().parent(), 'pass1')
     });
-    $("p:contains('@ShowHideCriteria')").parent().parent().each(function() {
-        addShowHideCriteria("@ShowHideCriteria", $(this))
+	// 2nd pass through of the @ShowHideCriteria Options - THIS IS REQUIRED A 2ND TIME
+    $("p:contains('@ShowHideCriteria')").each(function() {
+        addShowHideCriteria($(this).text(), $(this).parent().parent(), 'pass2')
     });
     $("p:contains('@ShowHideOR')").parent().parent().each(function() {
         makeShowHideOR("@ShowHideOR", $(this))
@@ -140,10 +168,12 @@ function transformRO() {
     }
     $("p:contains('@QueryList')").parent().parent().each(function() {
 		buildQueryList("@QueryList", $(this))
-        });
-
+	});
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
+    });
+    $("p:contains('@AddInformation')").parent().parent().each(function() {
+        addInformation("@AddInformation", $(this))
     });
     $("p:contains('@ToUpperCase')").parent().parent().each(function() {
         upperCaseInput("@ToUpperCase", $(this))
@@ -178,6 +208,35 @@ function recompAngularElement(recompEle) {
 			$compile(el)($scope)
 		});
 	}
+}
+
+function addInformation(tag, tagElement) {
+    var userDefined = parseOptions(tag, tagElement);
+	if (!userDefined.info && !userDefined.icon) {
+		tagElement.remove();
+		return;
+	}
+    var target = tagElement.next();
+	var IDNum = (Math.floor(Math.random() * 999999999999) + 1);
+	var divStart = '<div>';
+	var divStartText = '<div id="IconHoverText' + IDNum + '">';
+	var divEnd = '</div>';
+	if (!userDefined.info) {
+		var iconHover = $(target).append(divStart + '<i class="fa fa-question-circle AROHoverIcon" id="IconHoverArea' + IDNum + '"></i>' + divEnd);
+		$(target).addClass('inline-spacing');
+		$('#IconHoverArea' + IDNum).mouseenter(function(){$(this).after(divStartText + userDefined.icon + divEnd)});
+		$('#IconHoverArea' + IDNum).mouseleave(function(){$('#IconHoverText' + IDNum).remove()});
+	} else {
+		$(target).append(divStart + userDefined.info + divEnd);
+	}
+	tagElement.remove();
+}
+
+// Prevent CR on textarea's where specified
+function forceSingleLineEntry(tag, tagElement) {
+    var target = tagElement.next();
+	$(target).keydowm(function(event){if(event.which == 13 ){event.preventDefault();}}).keyup(function(event){if(event.which == 13 ){event.preventDefault();}});
+	tagElement.remove();
 }
 
 function applyLayoutTemplate (tag, tagElement) {
@@ -338,8 +397,8 @@ function makeShowHideOR(tag, tagElement) {
 // combine Show/Hide criteria for @AutoComplete and @MultiSelect Controls
 function createNgShow(ngShow, ngShowCriteria, ngShowHide) {
 	if (ngShow == "") return ngShowCriteria;
-	ngShow = ngShow + ngShowHide + ngShowCriteria;
-	return "(" + ngShow + ")";
+	ngShow = ngShow + ' ' + ngShowHide + ' ' + ngShowCriteria;
+	return "( " + ngShow + " )";
 }
 
 //modify boolean criteria to take into account if booleans are null, false or true without needing to check/uncheck them if additional criteria added
@@ -365,18 +424,37 @@ function modBoolCriteria(criteria) {
 }
 
 // add additional Show/Hide Criteria to non querty prompts
-function addShowHideCriteria(tag, tagElement, ngshowhide) {
-    // set either "AND" for the tag @ShowHideCriteria or "OR" for the tag @ShowHideCriteriaOR
-	if (tag == "@ShowHideORCriteria") {
+function addShowHideCriteria(tag, tagElement, SHCPassNum) {
+	//return if pass not the correct one
+	if ( (tag.indexOf('2') < 0 && SHCPassNum == 'pass2') || (tag.indexOf('2') > -1 && SHCPassNum == 'pass1') ) {
+		return
+	}
+    // set either "AND" for the tag @ShowHideCriteria/2 or "OR" for the tag @ShowHideCriteriaOR/2
+	var ngshowhide = '';
+	var ngshow1 = '';
+	var ngshow2 = '';
+	if (tag.indexOf("@ShowHideCriteriaOR") != -1) {
 		ngshowhide = "||";
 	} else {
 		ngshowhide = "&&";
 	}
-	tagElementNext = tagElement.next('div')
     var ngshow1 = tagElement.attr("ng-show");
-    var ngshow2 = tagElementNext.attr("ng-show");
+	// find next element to apply criteria to for each pass through
+	tagElementNext = tagElement.next('div');
+	if (SHCPassNum == 'pass2') {
+		tagElementCheck = tagElementNext.find('p');
+		while ( ( tagElementCheck.text().indexOf('@ShowHideCriteria') > -1 ) && (tagElementCheck.text().indexOf('2') < 0 ) ) {
+			tagElementNext = tagElementNext.next('div');
+			tagElementCheck = tagElementNext.find('p');
+		}
+	}
+	var ngshow2 = tagElementNext.attr("ng-show");
+	var RO_Toolbox_ShowHideDone = tagElementNext.attr("RO_Toolbox_ShowHideDone");
     tagElement.hide();
-	
+	//return if pass already processed and already processed
+	if (RO_Toolbox_ShowHideDone == 'Updated' + SHCPassNum) {
+		return
+	}
 	// combine preset Show/Hide Criteria
 	var ngshow = "";
 	if (typeof ngshow1 != 'undefined') {
@@ -394,6 +472,7 @@ function addShowHideCriteria(tag, tagElement, ngshowhide) {
 
 	// replace Show/Hide Criteria on item
 	tagElementNext.attr("ng-show", ngshow);
+	tagElementNext.attr("RO_Toolbox_ShowHideDone", 'Updated' + SHCPassNum);
 	
 	if (ngshow != "") {
 		// recompile AngularElement if Required and able to
@@ -602,6 +681,13 @@ function createAutoComplete(tag, tagElement) {
 		queryResults.after('<div class="row custom-item-picker" style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<input id="ac' + targetId + '" style="width: 100%;" /></div></div>');
     }
 
+	// Add Data Merge Attributes to Multiselect, so that they can be processed on typing and selection changes
+	var MSID = '#ac' + targetId;
+	if (typeof tagElement.attr('ROToolBoxGetDataName') != 'undefined') { $(MSID).attr('ROToolBoxGetDataName',tagElement.attr('ROToolBoxgetDataName')); };
+	if (typeof tagElement.attr('ROToolBoxGetDataType') != 'undefined') { $(MSID).attr('ROToolBoxGetDataType',tagElement.attr('ROToolBoxgetDataType')); };
+	if (typeof tagElement.attr('ROToolBoxGetDataGUID') != 'undefined') { $(MSID).attr('ROToolBoxGetDataGUID',tagElement.attr('ROToolBoxgetDataGUID')); };
+	if (typeof tagElement.attr('ROToolBoxAddData') != 'undefined') { $(MSID).attr('ROToolBoxAddData',tagElement.attr('ROToolBoxAddData')); };
+	
     // Monitor input attribute to display custom error msg
     // TODO: Does not re-show error, after first success and then removing value from field
     var obs = new MutationObserver (function(mutations) {      
@@ -857,12 +943,12 @@ function createMultiSelect(tag, tagElement) {
                 }
             },
 			sort: {
-				field: arrColumnNames[0],
+				field: "DisplayName",
 				dir: "asc"
 			},
             schema: {
                 parse: function(data) {
-                    return preprocessData(data);
+					return preprocessData(data);
                 },
                 data: "Data"
             }
@@ -873,7 +959,7 @@ function createMultiSelect(tag, tagElement) {
                 $(el).val(selectedItems);
                 $(el).change();
             });
-        }
+		}
     });
 }
 
@@ -1016,5 +1102,4 @@ function tbxDatePicker  (targetEle, settings) {
 			$(this).parents(".form-group").removeClass('has-error');
 		}
 	});
-
 }

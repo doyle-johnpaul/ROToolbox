@@ -1,4 +1,12 @@
 ﻿/*
+ *  ARO Information Icon CSS
+*/
+i.AROHoverIcon {
+	font-size: 36px;
+	color: blue
+}
+
+/*
     Styles for the datepicker in the Request Offering Toolbox.
 	These are required so that the date picker matches the date time picker on the forms.
 */
