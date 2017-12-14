@@ -235,7 +235,7 @@ function addInformation(tag, tagElement) {
 // Prevent CR on textarea's where specified
 function forceSingleLineEntry(tag, tagElement) {
     var target = tagElement.next();
-	$(target).keydowm(function(event){if(event.which == 13 ){event.preventDefault();}}).keyup(function(event){if(event.which == 13 ){event.preventDefault();}});
+	$(target).keydown(function(event){if(event.which == 13 ){event.preventDefault();}}).keyup(function(event){if(event.which == 13 ){event.preventDefault();}});
 	tagElement.remove();
 }
 
