@@ -91,6 +91,34 @@
       UTC: [true|false (default)] The selected date and time is sent back to the server in UTC. This is ideal in situations where you want to schedule something based on the value, or where you wish to store the value in a datetime field on the database.
       Interval: [integer] This value specifies the interval between values in the popup list in minutes.
       Start: ["month"|"year"|"decade"|"century"] Specifies the start view of the calendar. For example, when requesting a birth date, it would make sense to open the control with the century as the first view.
+
+   @AddDataMergeProperty
+   -----------
+	@AddDataMergeProperty is used to set either a get data from or add data to option to a @MultiSelect and/or @AutoComplete
+	this is then used to get data about related class items to any item(s) selected from one or more selections,
+	and add these as extra items one or more @AutoComplete and/or @MultiSelect.
+	The 2 Properties that should be used for this are "GetData" then a Unique Name, and "AddData" with a Unique Name or 'ALL'
+
+	for example, if you wished to have a autocomplete or multiselect for computers, and then another which lists business services,
+	but you also wanted to add any software that is installed on the selected PC's to the list of business services, you could do
+	this by doing the following :
+	1. Create a TypeProjection that gets software items related to computers (installed software), and find the ProjectionType GUID
+	2. Add a @AutoComplete or @MultiSelect for computers to the ARO
+	3. before the @AutoComplete or @MultiSelect add the following
+		@AddDataMergeProperty {"Name":"Software","GUID":"90bc5c2b-c7b9-71f3-a4d8-3acaa565f9ab"}
+			Note: The Name should be individual to the data retrieved from this selection, as you can retrieve data from multiple
+				selections
+			Note2: The GUID entered should be the GUID of the TypeProjection to use
+	4. Add another @AutoComplete or @MultiSelect control, that can retrieve whichever class you wish to have and add the extra
+		items to, 
+				NOTE: this can also be an enmpty class if you wish to create the entire list from related items in other @AutoComplete
+				and/or @MultiSelect fields
+	5. before the @AutoComplete or @MultiSelect that you wish to add the data to add the following
+		@AddDataMergeProperty {"AddData":"Software"}
+			NOTE: The name entered for the AddData is the name that was used to retrieve data, this is used so that there can
+				be multiple retrievals and additions per page.
+			NOTE2: there is a reserved name called "ALL" if this is used on the AddData then all items retrieved will be added,
+				not just a spoecific named item.
 	  
    @QueryList
    ----------
@@ -128,9 +156,17 @@ function transformRO() {
     app.events.unsubscribe('sessionStorageReady',transformRO);
     app.lib.mask.apply();
 
-	$("p:contains('@SingleLineEntry')").parent().parent().each(function() {
-        forceSingleLineEntry("@SingleLineEntry", $(this))
+
+
+
+
+	// Process Data Merge Properties
+    $("p:contains('@AddDataMergeProperty')").parent().parent().each(function() {
+        AddDataMergeProperty("@AddDataMergeProperty", $(this))
     });
+	//$("p:contains('@SingleLineEntry')").parent().parent().each(function() {
+    //    singleLineEntry("@SingleLineEntry", $(this))
+    //});
     $("p:contains('@ConfirmFields')").parent().parent().each(function () {
       confirmFields($(this))
     });
@@ -532,6 +568,21 @@ function addCssClass(tag, tagElement) {
     tagElement.remove();
 }
 
+function AddDataMergeProperty(tag, tagElement) {
+    var userDefined = parseOptions(tag, tagElement);
+	if (!userDefined.AddData && (!userDefined.Name || !userDefined.GUID)) {
+		tagElement.remove();
+		return;
+	}
+    var target = tagElement.next();
+	if (typeof userDefined.Name != 'undefined' && typeof userDefined.GUID != 'undefined') {
+		target.attr('ROToolBoxGetDataName', userDefined.Name);
+		target.attr('ROToolBoxGetDataGUID', userDefined.GUID);
+	};
+	if (typeof userDefined.AddData != 'undefined') { target.attr('ROToolBoxAddData', userDefined.AddData); };
+    tagElement.remove();
+}
+
 function createDateRange(tag, tagElement) {
     var userDefined = parseOptions(tag, tagElement);
     var startDate = tagElement.next();
@@ -684,7 +735,6 @@ function createAutoComplete(tag, tagElement) {
 	// Add Data Merge Attributes to Multiselect, so that they can be processed on typing and selection changes
 	var MSID = '#ac' + targetId;
 	if (typeof tagElement.attr('ROToolBoxGetDataName') != 'undefined') { $(MSID).attr('ROToolBoxGetDataName',tagElement.attr('ROToolBoxgetDataName')); };
-	if (typeof tagElement.attr('ROToolBoxGetDataType') != 'undefined') { $(MSID).attr('ROToolBoxGetDataType',tagElement.attr('ROToolBoxgetDataType')); };
 	if (typeof tagElement.attr('ROToolBoxGetDataGUID') != 'undefined') { $(MSID).attr('ROToolBoxGetDataGUID',tagElement.attr('ROToolBoxgetDataGUID')); };
 	if (typeof tagElement.attr('ROToolBoxAddData') != 'undefined') { $(MSID).attr('ROToolBoxAddData',tagElement.attr('ROToolBoxAddData')); };
 	
@@ -760,8 +810,28 @@ function createAutoComplete(tag, tagElement) {
 			},
             schema: {
                 parse: function(data) {
-                    return preprocessData(data);
-                },
+ 					//set to a variable instead of just returning so that we can process the DataMerge functions
+					var jd = preprocessData(data);
+					//Add any DataMerge items to the data source
+					$("#ac" + targetId).each(function() {
+						ROTBGetAddData = $(this).attr('ROToolBoxAddData');
+						if (typeof ROTBGetAddData != 'undefined') {
+							if (DataMergeResults.length > 0) {
+								var mdms = $("#ms" + targetId).data('kendoMultiSelect');
+								for (var i = 0; i < DataMergeResults.length; i++) {
+									if ( ROTBGetAddData == 'All' || DataMergeResults[i].Name == ROTBGetAddData ) {
+										for (var y = 0; y < DataMergeResults[i].Data.length; y++) {
+											if (DataMergeResults[i].Data[y].DisplayName.toLowerCase().indexOf(mdms.input.val().toLowerCase()) > -1) {
+												jd.Data.push({DisplayName: DataMergeResults[i].Data[y].DisplayName, BaseId: DataMergeResults[i].Data[y].BaseId});
+											}
+										}
+									}
+								}
+							}
+						}
+					});
+					return jd;
+               },
                 data: "Data"
             }
         }),
@@ -771,6 +841,57 @@ function createAutoComplete(tag, tagElement) {
                 $(el).val(item.BaseId);
                 $(el).change();
             });
+			//Process DataMerge functions to get data related to selected items and add to list to be added to other multiselect/autocomplete controls
+            $("#ac" + targetId).each(function() {
+				ROTBGetDataName = $(this).attr('ROToolBoxGetDataName');
+				if( typeof ROTBGetDataName != 'undefined') {
+					// remove all current named data
+					if (DataMergeResults.length > 0 ) {
+						for (var x = (DataMergeResults.length - 1); x >= 0; x--) {
+							if (DataMergeResults[x].Name == ROTBGetDataName) { DataMergeResults.splice(x, 1); }
+						}
+					}
+					// Add New named Data
+					var KMSselecteditems = $(this).data("kendoMultiSelect").dataItems();
+					if ( KMSselecteditems.length > 0 ) {
+						ROTBGetDataGUID = $(this).attr('ROToolBoxGetDataGUID')
+						for (var x = 0; x < KMSselecteditems.length; x++) {
+							ROTBGetDataFilter = KMSselecteditems[x].DisplayName;
+							$.ajax({
+								url: "/api/V3/Projection/GetProjectionByCriteria",
+								data: JSON.stringify({
+									"Id": ROTBGetDataGUID,
+									"Criteria": { "Base": { "Expression": { "And": { "Expression": [{ "SimpleExpression": {
+										"ValueExpressionLeft": {"Property": "$Context/Property[Type='55270a70-ac47-c853-c617-236b0cff9b4c']/DisplayName$"},
+										"Operator": "Equal",
+										"ValueExpressionRight": {"Value": ROTBGetDataFilter}
+									} }] } } } }
+								}),
+								type: "Post",
+								contentType: "application/json; charset=utf-8",
+								dataType: "json",
+								success: function (data) {
+									$.each(data[0], function(key, value) {
+										if (typeof(value) == 'object') {
+											if (typeof(value) != 'undefined' && value != null && key != 'AssetStatus' && key != 'ObjectStatus' && key != 'NameRelationship') {
+												var ROTBReturnedData = [];
+												if(typeof(value.length) == 'undefined' ) {
+														ROTBReturnedData.push({DisplayName: value.DisplayName, BaseId: value.BaseId});
+												} else if (value.length > 0) {
+													for(y = 0; y < value.length; y++) {
+														ROTBReturnedData.push({DisplayName: value[y].DisplayName, BaseId: value[y].BaseId});
+													}
+												}
+												DataMergeResults.push({Name: ROTBGetDataName, Data: ROTBReturnedData});
+											}
+										}
+									});
+								}
+							});
+						}
+					}
+				}
+			});
         }
     });
 }
@@ -876,6 +997,12 @@ function createMultiSelect(tag, tagElement) {
 		queryResults.after('<div class="row custom-item-multipicker" style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<select id="ms' + targetId + '" style="width: 100%;" /></div></div>');
     }
 	
+	// Add Data Merge Attributes to Multiselect, so that they can be processed on typing and selection changes
+	var MSID = '#ms' + targetId;
+	if (typeof tagElement.attr('ROToolBoxGetDataName') != 'undefined') { $(MSID).attr('ROToolBoxGetDataName',tagElement.attr('ROToolBoxgetDataName')); };
+	if (typeof tagElement.attr('ROToolBoxGetDataGUID') != 'undefined') { $(MSID).attr('ROToolBoxGetDataGUID',tagElement.attr('ROToolBoxgetDataGUID')); };
+	if (typeof tagElement.attr('ROToolBoxAddData') != 'undefined') { $(MSID).attr('ROToolBoxAddData',tagElement.attr('ROToolBoxAddData')); };
+	
     // Monitor input attribute to display custom error msg
     var obs = new MutationObserver (function(mutations) {      
 		var invalidState = queryResults.find('div[data-control-type="checkboxGridByCriteriaOld"]').find('input#' + targetId).attr("aria-invalid");
@@ -948,7 +1075,27 @@ function createMultiSelect(tag, tagElement) {
 			},
             schema: {
                 parse: function(data) {
-					return preprocessData(data);
+					//set to a variable instead of just returning so that we can process the DataMerge functions
+					var jd = preprocessData(data);
+					//Add any DataMerge items to the data source
+					$("#ms" + targetId).each(function() {
+						ROTBGetAddData = $(this).attr('ROToolBoxAddData');
+						if (typeof ROTBGetAddData != 'undefined') {
+							if (DataMergeResults.length > 0) {
+								var mdms = $("#ms" + targetId).data('kendoMultiSelect');
+								for (var i = 0; i < DataMergeResults.length; i++) {
+									if ( ROTBGetAddData == 'All' || DataMergeResults[i].Name == ROTBGetAddData ) {
+										for (var y = 0; y < DataMergeResults[i].Data.length; y++) {
+											if (DataMergeResults[i].Data[y].DisplayName.toLowerCase().indexOf(mdms.input.val().toLowerCase()) > -1) {
+												jd.Data.push({DisplayName: DataMergeResults[i].Data[y].DisplayName, BaseId: DataMergeResults[i].Data[y].BaseId});
+											}
+										}
+									}
+								}
+							}
+						}
+					});
+					return jd;
                 },
                 data: "Data"
             }
@@ -959,6 +1106,57 @@ function createMultiSelect(tag, tagElement) {
                 $(el).val(selectedItems);
                 $(el).change();
             });
+			//Process DataMerge functions to get data related to selected items and add to list to be added to other multiselect/autocomplete controls
+            $("#ms" + targetId).each(function() {
+				ROTBGetDataName = $(this).attr('ROToolBoxGetDataName');
+				if( typeof ROTBGetDataName != 'undefined') {
+					// remove all current named data
+					if (DataMergeResults.length > 0 ) {
+						for (var x = (DataMergeResults.length - 1); x >= 0; x--) {
+							if (DataMergeResults[x].Name == ROTBGetDataName) { DataMergeResults.splice(x, 1); }
+						}
+					}
+					// Add New named Data
+					var KMSselecteditems = $(this).data("kendoMultiSelect").dataItems();
+					if ( KMSselecteditems.length > 0 ) {
+						ROTBGetDataGUID = $(this).attr('ROToolBoxGetDataGUID')
+						for (var x = 0; x < KMSselecteditems.length; x++) {
+							ROTBGetDataFilter = KMSselecteditems[x].DisplayName;
+							$.ajax({
+								url: "/api/V3/Projection/GetProjectionByCriteria",
+								data: JSON.stringify({
+									"Id": ROTBGetDataGUID,
+									"Criteria": { "Base": { "Expression": { "And": { "Expression": [{ "SimpleExpression": {
+										"ValueExpressionLeft": {"Property": "$Context/Property[Type='55270a70-ac47-c853-c617-236b0cff9b4c']/DisplayName$"},
+										"Operator": "Equal",
+										"ValueExpressionRight": {"Value": ROTBGetDataFilter}
+									} }] } } } }
+								}),
+								type: "Post",
+								contentType: "application/json; charset=utf-8",
+								dataType: "json",
+								success: function (data) {
+									$.each(data[0], function(key, value) {
+										if (typeof(value) == 'object') {
+											if (typeof(value) != 'undefined' && value != null && key != 'AssetStatus' && key != 'ObjectStatus' && key != 'NameRelationship') {
+												var ROTBReturnedData = [];
+												if(typeof(value.length) == 'undefined' ) {
+														ROTBReturnedData.push({DisplayName: value.DisplayName, BaseId: value.BaseId});
+												} else if (value.length > 0) {
+													for(y = 0; y < value.length; y++) {
+														ROTBReturnedData.push({DisplayName: value[y].DisplayName, BaseId: value[y].BaseId});
+													}
+												}
+												DataMergeResults.push({Name: ROTBGetDataName, Data: ROTBReturnedData});
+											}
+										}
+									});
+								}
+							});
+						}
+					}
+				}
+			});
 		}
     });
 }
