@@ -134,7 +134,7 @@
 
 	@SingleLineEntry
 	----------------
-	Prvents the entry of a CR on a text area this entry is placed before
+	Prevents the entry of a CR on a text area this entry is placed before
 	
 	@AddInformation
 	---------------
@@ -145,6 +145,34 @@
 			@AddInformation {"icon":"&lt;p&gt;Text or formating here&lt;br&gt;even multiple lines&lt;/p&gt"}
 		Information Mode :
 			@AddInformation {"info":"&lt;p&gt;Text or formating here&lt;br&gt;even multiple lines&lt;/p&gt"}
+			
+			
+	@CharCount
+	----------
+	Adds option for displaying the Minimum characters required and/or maximum characters remaining below a text area (input)
+	
+	By default the follow will occur:
+		1 - if there is  a minimum length, then it counts down while more characters are required, and displays this below the field
+		2 - if there is  a maximum length, and there is no minimum length, or the minimum length has already been reached,
+			it counts down while more characters are available, and displays this below the field
+			
+	Available Options :
+		showMin : true/false (default : true)
+			enables or disables showing the minimum characters still required
+		showMax : true/false (default : true)
+			enables or disables showing the remaining characters available
+		showMinMax : true/false (default : false)
+			Shows both the3 remaining required AND remaining available character counts
+		minText : The text to use in place of the default "Minimum Extra Characters Required"
+		maxText : The text to use in place of the default "Maximum Characters Remaining"
+
+	Examples :
+		To show both Min and Max counts at the same time, and use different text
+			@CharCount{"showMinMax":"true","showMin":"false","showMax":"false","minText":"MINIMUM REMAINING","maxText":"MAX REMAINING"}
+		To show  Minimum only , which no longer displays after the count is reached (default only needs to be over ridden)
+			@CharCount{"showMax":"false"}
+			
+	NOTE : If there is no minlength or maxlength defined on the field, then it will not show even if the options are added from this entry
 			
 */
 app.events.subscribe('sessionStorageReady',transformRO());
@@ -164,14 +192,20 @@ function transformRO() {
     $("p:contains('@AddDataMergeProperty')").parent().parent().each(function() {
         AddDataMergeProperty("@AddDataMergeProperty", $(this))
     });
-	//$("p:contains('@SingleLineEntry')").parent().parent().each(function() {
-    //    singleLineEntry("@SingleLineEntry", $(this))
-    //});
+	$("p:contains('@CharCount')").parent().parent().each(function() {
+        charCountDisplay("@CharCount", $(this))
+    });
+	$("p:contains('@SingleLineEntry')").parent().parent().each(function() {
+        forceSingleLineEntry("@SingleLineEntry", $(this))
+    });	
     $("p:contains('@ConfirmFields')").parent().parent().each(function () {
       confirmFields($(this))
     });
     $("p:contains('@Placeholder')").parent().parent().each(function() {
         makePlaceholder("@Placeholder", $(this))
+    });
+    $("p:contains('@AddInformation')").parent().parent().each(function() {
+        addInformation("@AddInformation", $(this))
     });
 	//@ShowHideCriteria Options need to be run through twice, so we call the same function twice
     $("p:contains('@ShowHideCriteria')").each(function() {
@@ -207,9 +241,6 @@ function transformRO() {
 	});
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
-    });
-    $("p:contains('@AddInformation')").parent().parent().each(function() {
-        addInformation("@AddInformation", $(this))
     });
     $("p:contains('@ToUpperCase')").parent().parent().each(function() {
         upperCaseInput("@ToUpperCase", $(this))
@@ -268,12 +299,55 @@ function addInformation(tag, tagElement) {
 	tagElement.remove();
 }
 
+// Set up options for the min / max character display
+function charCountDisplay(tag, tagElement) {
+    var target = tagElement.next();
+	var minText = "Minimum Extra Characters Required";
+	var maxText = "Maximum Characters Remaining";
+	var showMin = 'true';
+	var showMax = 'true';
+	var showMinMax = 'false';
+    var userDefined = parseOptions(tag, tagElement);
+	if (typeof userDefined.minText != 'undefined') { minText = userDefined.minText;};
+	if (typeof userDefined.maxText != 'undefined') { maxText = userDefined.maxText;};
+	if (typeof userDefined.showMin != 'undefined') { showMin = userDefined.showMin;};	
+	if (typeof userDefined.showMax != 'undefined') { showMax = userDefined.showMax;};
+	if (typeof userDefined.showMinMax != 'undefined') { showMinMax = userDefined.showMinMax;};	
+
+	var targetTA = $(target).find('textarea');
+	var charMin = $(targetTA).parent().find('input').attr('minlength');
+	if (typeof charMin == 'undefined') { charMin = 0; }
+	var charMax = $(targetTA).parent().find('input').attr('maxlength');
+	if (typeof charMax == 'undefined') { charMax = 0; }
+	
+	$(targetTA).on('paste',(function(e) { var tgtele = $(this); setTimeout( function() { MinMaxChars(tgtele,charMin,charMax, minText,maxText,showMin,showMax,showMinMax); },100) } ));
+	$(targetTA).on('keyup',(function(e) { MinMaxChars($(this),charMin,charMax, minText,maxText,showMin,showMax,showMinMax); } ));
+	tagElement.remove();
+}
+
+// Add the Minimum / Maximum requiored text to the page
+function MinMaxChars(tgtele,charMin,charMax, minText,maxText,showMin,showMax,showMinMax) {
+	$(tgtele).parent().find('span.charCount').remove()
+	var currentLength = $(tgtele).val().length
+	var minRemainingCharacters = charMin - currentLength
+	var remainingCharacters = charMax - currentLength
+	if (showMinMax == 'true' && charMax > 0) {
+		if (minRemainingCharacters < 0) { minRemainingCharacters = 0 }
+		$(tgtele).parent().append('<span class="charCount">' + minText + ' : ' + minRemainingCharacters + ' - ' + maxText + ' : ' + remainingCharacters + '</span>')
+	} else if (showMin == 'true' && minRemainingCharacters > 0) {
+		$(tgtele).parent().append('<span class="charCount">' + minText + ' : ' + minRemainingCharacters + '</span>')
+	} else if (showMax == 'true' && charMax > 0) {
+		$(tgtele).parent().append('<span class="charCount">' + maxText + ' : ' + remainingCharacters + '</span>')
+	}
+}
+
 // Prevent CR on textarea's where specified
 function forceSingleLineEntry(tag, tagElement) {
     var target = tagElement.next();
 	$(target).keydown(function(event){if(event.which == 13 ){event.preventDefault();}}).keyup(function(event){if(event.which == 13 ){event.preventDefault();}});
 	tagElement.remove();
 }
+
 
 function applyLayoutTemplate (tag, tagElement) {
     var userDefined = parseOptions(tag, tagElement);
@@ -817,7 +891,7 @@ function createAutoComplete(tag, tagElement) {
 						ROTBGetAddData = $(this).attr('ROToolBoxAddData');
 						if (typeof ROTBGetAddData != 'undefined') {
 							if (DataMergeResults.length > 0) {
-								var mdms = $("#ms" + targetId).data('kendoMultiSelect');
+								var mdms = $("#ac" + targetId).data('kendoAutoSelect');
 								for (var i = 0; i < DataMergeResults.length; i++) {
 									if ( ROTBGetAddData == 'All' || DataMergeResults[i].Name == ROTBGetAddData ) {
 										for (var y = 0; y < DataMergeResults[i].Data.length; y++) {
@@ -852,7 +926,7 @@ function createAutoComplete(tag, tagElement) {
 						}
 					}
 					// Add New named Data
-					var KMSselecteditems = $(this).data("kendoMultiSelect").dataItems();
+					var KMSselecteditems = $(this).data("kendoAutoSelect").dataItems();
 					if ( KMSselecteditems.length > 0 ) {
 						ROTBGetDataGUID = $(this).attr('ROToolBoxGetDataGUID')
 						for (var x = 0; x < KMSselecteditems.length; x++) {
