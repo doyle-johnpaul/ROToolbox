@@ -118,7 +118,7 @@
 			NOTE: The name entered for the AddData is the name that was used to retrieve data, this is used so that there can
 				be multiple retrievals and additions per page.
 			NOTE2: there is a reserved name called "ALL" if this is used on the AddData then all items retrieved will be added,
-				not just a spoecific named item.
+				not just a specific named item.
 	  
    @QueryList
    ----------
@@ -162,7 +162,7 @@
 		showMax : true/false (default : true)
 			enables or disables showing the remaining characters available
 		showMinMax : true/false (default : false)
-			Shows both the3 remaining required AND remaining available character counts
+			Shows both the remaining required AND remaining available character counts
 		minText : The text to use in place of the default "Minimum Extra Characters Required"
 		maxText : The text to use in place of the default "Maximum Characters Remaining"
 
@@ -173,21 +173,45 @@
 			@CharCount{"showMax":"false"}
 			
 	NOTE : If there is no minlength or maxlength defined on the field, then it will not show even if the options are added from this entry
-			
+	
+	@PreventSelectSelf
+	------------------
+	
+	When added before a query picker (directly before the query picker, not before the @AutoComplete/@MultiSelect) this will
+	remove any returned entries that match with session.user.Id. thus preventing the current user from selecting themselves
+	from the list, useful for selecting approvers etc to they canot select themselves to approve.
+
+	
+	
+	Events available to be subscribed to:
+	-------------------------------------
+	A number of events have been added, so that you can use these in other scripts to ensure your scripts do not start too early/late
+	
+	To subscripbe to these events in your scripts use "app.events.subscribe('EventName',FunctionToCall)
+	
+	The following events are available:
+	
+	ROToolBoxStart : activates as the toobox starts it's processing
+	ROToolBoxSHCStart : activates just before it starts to process the Show/Hide Criteria options
+	ROToolBoxSHCDone : activates just after it finishes processing the Show/Hide Criteria options
+	ROToolBoxACMSStart : activates just before starting to process any @AutoComplete and @MultiSelect options
+	ROToolBoxACMSDone : activates just after finishing all #AutoComplete and @MultiSelect processing
+	ROToolBoxDone : activates once all toolbox actions have completed and the page has been completely rendered
+
 */
-app.events.subscribe('sessionStorageReady',transformRO());
-app.events.subscribe('sessionStorageReady',transformRO);
+app.events.subscribe('drawerCreated ',transformRO());
+app.events.subscribe('drawerCreated ',transformRO);
 
 var DataMergeResults = [];
 
 function transformRO() {   
-    app.events.unsubscribe('sessionStorageReady',transformRO);
+    app.events.unsubscribe('drawerCreated ',transformRO);
     app.lib.mask.apply();
+	app.events.publish('ROToolboxStart');
 
-
-
-
-
+    $("p:contains('@PreventSelectSelf')").parent().parent().each(function() {
+        AddPreventSelectSelfProperty("@PreventSelectSelf", $(this))
+    });
 	// Process Data Merge Properties
     $("p:contains('@AddDataMergeProperty')").parent().parent().each(function() {
         AddDataMergeProperty("@AddDataMergeProperty", $(this))
@@ -207,17 +231,20 @@ function transformRO() {
     $("p:contains('@AddInformation')").parent().parent().each(function() {
         addInformation("@AddInformation", $(this))
     });
+	app.events.publish('ROToolboxSHCStart');
 	//@ShowHideCriteria Options need to be run through twice, so we call the same function twice
     $("p:contains('@ShowHideCriteria')").each(function() {
         addShowHideCriteria($(this).text(), $(this).parent().parent(), 'pass1')
     });
 	// 2nd pass through of the @ShowHideCriteria Options - THIS IS REQUIRED A 2ND TIME
     $("p:contains('@ShowHideCriteria')").each(function() {
-        addShowHideCriteria($(this).text(), $(this).parent().parent(), 'pass2')
+		addShowHideCriteria($(this).text(), $(this).parent().parent(), 'pass2')
     });
     $("p:contains('@ShowHideOR')").parent().parent().each(function() {
         makeShowHideOR("@ShowHideOR", $(this))
     });
+	app.events.publish('ROToolboxSHCDone');
+	app.events.publish('ROToolboxACMSStart');
     if (!($("div.custom-item-picker").length)) {
         $("p:contains('@AutoComplete')").parent().parent().each(function() {
             createAutoComplete("@AutoComplete", $(this))
@@ -228,6 +255,7 @@ function transformRO() {
             createMultiSelect("@MultiSelect", $(this))
         });
     }
+	app.events.publish('ROToolboxACMSDone');
     $("p:contains('@DatePicker')").parent().parent().each(function() {
 		customDatePicker("@DatePicker", $(this))
         });
@@ -242,6 +270,9 @@ function transformRO() {
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
     });
+    $("p:contains('@addAttr')").parent().parent().each(function() {
+        addAttrValue("@addAttr", $(this))
+    });
     $("p:contains('@ToUpperCase')").parent().parent().each(function() {
         upperCaseInput("@ToUpperCase", $(this))
     });
@@ -252,6 +283,7 @@ function transformRO() {
         applyLayoutTemplate("@Layout", $(this))
     });
     app.lib.mask.remove();
+	app.events.publish('ROToolboxDone');
 }
 
 function parseOptions(controlName, control) {
@@ -270,9 +302,10 @@ function recompAngularElement(recompEle) {
 	$scope = el.scope();
 	$injector = el.injector();
 	// if it exists, recompile so that ngshow attribute modification work
-	if (typeof injector != 'undefined') {
+	if (typeof $injector != 'undefined') {
 		$injector.invoke(function($compile){
-			$compile(el)($scope)
+			$compile(el)($scope);
+				$scope.$digest();
 		});
 	}
 }
@@ -507,27 +540,32 @@ function makeShowHideOR(tag, tagElement) {
 // combine Show/Hide criteria for @AutoComplete and @MultiSelect Controls
 function createNgShow(ngShow, ngShowCriteria, ngShowHide) {
 	if (ngShow == "") return ngShowCriteria;
-	ngShow = ngShow + ' ' + ngShowHide + ' ' + ngShowCriteria;
-	return "( " + ngShow + " )";
+	if (ngShowCriteria == "") return ngShow;
+	return "( " + ngShow + ' ' + ngShowHide + ' ' + ngShowCriteria + " )";
 }
 
 //modify boolean criteria to take into account if booleans are null, false or true without needing to check/uncheck them if additional criteria added
 function modBoolCriteria(criteria) {
-	var criteriastart = criteria.lastIndexOf('(');
-	var criteriaend = ( criteria.length - criteriastart - 1);
-	if (criteria.substr((criteriastart - 1), 1) == "!") {
-		if (criteria.indexOf('false') > -1) {
-			criteria = criteria.substr(criteriastart, criteriaend);
-			criteria = criteria.replace('false', 'true');
+	if (criteria.indexOf('compareString') > -1 ) {
+		return criteria;
+	}
+	if ( criteria.indexOf('null') > -1) {
+		var criteriastart = criteria.lastIndexOf('(');
+		var criteriaend = ( criteria.length - criteriastart - 1);
+		if (criteria.substr((criteriastart - 1), 1) == "!") {
+			if (criteria.indexOf('false') > -1) {
+				criteria = criteria.substr(criteriastart, criteriaend);
+				criteria = criteria.replace('false', 'true');
+			} else {
+				criteria = '!' + criteria.substr(criteriastart, criteriaend);
+			}
 		} else {
-			criteria = '!' + criteria.substr(criteriastart, criteriaend);
-		}
-	} else {
-		if (criteria.indexOf('false') > -1) {
-			criteria = '!' + criteria.substr(criteriastart, criteriaend);
-			criteria = criteria.replace('false', 'true');
-		} else {
-			criteria = criteria.substr(criteriastart, criteriaend);
+			if (criteria.indexOf('false') > -1) {
+				criteria = '!' + criteria.substr(criteriastart, criteriaend);
+				criteria = criteria.replace('false', 'true');
+			} else {
+				criteria = criteria.substr(criteriastart, criteriaend);
+			}
 		}
 	}
 	return criteria;
@@ -550,33 +588,18 @@ function addShowHideCriteria(tag, tagElement, SHCPassNum) {
 	}
     var ngshow1 = tagElement.attr("ng-show");
 	// find next element to apply criteria to for each pass through
-	tagElementNext = tagElement.next('div');
-	if (SHCPassNum == 'pass2') {
-		tagElementCheck = tagElementNext.find('p');
-		while ( ( tagElementCheck.text().indexOf('@ShowHideCriteria') > -1 ) && (tagElementCheck.text().indexOf('2') < 0 ) ) {
-			tagElementNext = tagElementNext.next('div');
-			tagElementCheck = tagElementNext.find('p');
-		}
-	}
+	tagElementNext = tagElement.next();
 	var ngshow2 = tagElementNext.attr("ng-show");
 	var RO_Toolbox_ShowHideDone = tagElementNext.attr("RO_Toolbox_ShowHideDone");
-    tagElement.hide();
-	//return if pass already processed and already processed
-	if (RO_Toolbox_ShowHideDone == 'Updated' + SHCPassNum) {
-		return
-	}
+
 	// combine preset Show/Hide Criteria
 	var ngshow = "";
 	if (typeof ngshow1 != 'undefined') {
-		if (ngshow1.indexOf('compareString') < 0) {
 			ngshow1 = modBoolCriteria(ngshow1);
-		}
 		ngshow = createNgShow(ngshow, ngshow1, ngshowhide);
 	}
 	if (typeof ngshow2 != 'undefined') {
-		if (ngshow2.indexOf('compareString') < 0) {
 			ngshow2 = modBoolCriteria(ngshow2);
-		}
 		ngshow = createNgShow(ngshow, ngshow2, ngshowhide);
 	}
 
@@ -584,7 +607,10 @@ function addShowHideCriteria(tag, tagElement, SHCPassNum) {
 	tagElementNext.attr("ng-show", ngshow);
 	tagElementNext.attr("RO_Toolbox_ShowHideDone", 'Updated' + SHCPassNum);
 	
-	if (ngshow != "") {
+	// remove show hide tag div
+	tagElement.remove();
+
+	if (ngshow != "" && $(tagElementNext).text().indexOf('@ShowHideCriteria') != 0) {
 		// recompile AngularElement if Required and able to
 		recompAngularElement(tagElementNext);
 	}
@@ -642,6 +668,17 @@ function addCssClass(tag, tagElement) {
     tagElement.remove();
 }
 
+function addAttrValue(tag, tagElement) {
+    var userDefined = parseOptions(tag, tagElement);
+	if (!userDefined.Name || !userDefined.Value) {
+		tagElement.remove();
+		return;
+	}
+    var target = tagElement.next();
+    target.attr(userDefined.Name, userDefined.Value);
+    tagElement.remove();
+}
+
 function AddDataMergeProperty(tag, tagElement) {
     var userDefined = parseOptions(tag, tagElement);
 	if (!userDefined.AddData && (!userDefined.Name || !userDefined.GUID)) {
@@ -649,11 +686,17 @@ function AddDataMergeProperty(tag, tagElement) {
 		return;
 	}
     var target = tagElement.next();
-	if (typeof userDefined.Name != 'undefined' && typeof userDefined.GUID != 'undefined') {
+	if (typeof userDefined.AddData != 'undefined') {
+		target.attr('ROToolBoxAddData', userDefined.AddData);
+	} else {
 		target.attr('ROToolBoxGetDataName', userDefined.Name);
 		target.attr('ROToolBoxGetDataGUID', userDefined.GUID);
 	};
-	if (typeof userDefined.AddData != 'undefined') { target.attr('ROToolBoxAddData', userDefined.AddData); };
+    tagElement.remove();
+}
+
+function AddPreventSelectSelfProperty(tag, tagElement) {
+	tagElement.next().attr('PreventSelfSelect', true);
     tagElement.remove();
 }
 
@@ -717,10 +760,9 @@ function createAutoComplete(tag, tagElement) {
     var userInput = tagElement.next();
     userInput.hide();
     var queryResults = userInput.next();
-    queryResults.hide();
     var groupElements = tagElement.add(userInput);
     groupElements = groupElements.add(queryResults);
-    groupElements.wrapAll("<div class='row'><div class='col-md-12 col-xs-12'></div></div>");
+    groupElements.wrapAll("<div class='row'><div class='col-md-6 col-xs-12'></div></div>");
 
     // Get the definitions of the controls for the grid picker. We will use these to populate the auto complete control.
     var targetEle = queryResults.find('div[data-control="checkboxGridByCriteriaOld"]');
@@ -792,21 +834,46 @@ function createAutoComplete(tag, tagElement) {
 	
 	// combine preset Show/Hide Criteria
 	var ngshow = "";
-	if (typeof ngshow1 != 'undefined') { ngshow = createNgShow(ngshow, ngshow1, ngshowhide); }
-	if (typeof ngshow2 != 'undefined') { ngshow = createNgShow(ngshow, ngshow2, ngshowhide); }
-	if (typeof ngshow3 != 'undefined') { ngshow = createNgShow(ngshow, ngshow3, ngshowhide); }
-
-    // Add the HTML template for the AutoComplete control, along with Combined Show/Hide Criteria if set
+	if (typeof ngshow1 != 'undefined') {
+			ngshow1 = modBoolCriteria(ngshow1);
+		ngshow = createNgShow(ngshow, ngshow1, ngshowhide);
+	}
+	if (typeof ngshow2 != 'undefined') {
+			ngshow2 = modBoolCriteria(ngshow2);
+		ngshow = createNgShow(ngshow, ngshow2, ngshowhide);
+	}
+	if (typeof ngshow3 != 'undefined') {
+			ngshow3 = modBoolCriteria(ngshow3);
+		ngshow = createNgShow(ngshow, ngshow3, ngshowhide);
+	}
+	
+		targetDiv = $(tagElement).next().next();
+		$(targetDiv).wrapInner("<div class='oldquery' style='Display: none' />");
+    // Add the HTML template for the AutoComplete control, along with Combined Show/Hide Criteria if set, also ngsr attribute if needed to add/remove required
 	if (ngshow != "") {
 		ngshow = "(" + ngshow + ")";
-		var recompEle = queryResults.after('<div class="row custom-item-picker ng-hide" ng-show="' + ngshow + '" onhide style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<input id="ac' + targetId + '" style="width: 100%;" /></div></div>');
+		$(targetDiv).prepend('<div class="col-md-6 col-xs-12">' + controlLabel + '<div class="form-group"><input id="ac' + targetId + '" style="width: 100%;" /></div>');
+		$(targetDiv).parent().removeClass('question-container');
+		$(targetDiv).parent().addClass('custom-item-picker');
+		$(targetDiv).attr('ngsid', "ng" + targetId);
+		$(targetDiv).attr('ng-show', ngshow);
 		// recompile AngularElement if Required and able to
-		recompAngularElement(recompEle);
+		recompAngularElement(targetDiv);
+		var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+		if ( typeof $(cbGBC).attr('required') != 'undefined' ) {
+			$(cbGBC).attr('ngsr', 'true');
+		}
+		var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+		if ( typeof $(cbGBCO).attr('required') != 'undefined' ) {
+			$(cbGBCO).attr('ngsr', 'true');
+		}
     } else {
-		queryResults.after('<div class="row custom-item-picker" style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<input id="ac' + targetId + '" style="width: 100%;" /></div></div>');
+		$(targetDiv).prepend('<div class="col-md-6 col-xs-12">' + controlLabel + '<div class="form-group"><input id="ac' + targetId + '" style="width: 100%;" /></div></div>');
+		$(targetDiv).parent().removeClass('question-container');
+		$(targetDiv).parent().addClass('custom-item-picker');
     }
 
-	// Add Data Merge Attributes to Multiselect, so that they can be processed on typing and selection changes
+	// Add Data Merge Attributes to Autocomplete, so that they can be processed on typing and selection changes
 	var MSID = '#ac' + targetId;
 	if (typeof tagElement.attr('ROToolBoxGetDataName') != 'undefined') { $(MSID).attr('ROToolBoxGetDataName',tagElement.attr('ROToolBoxgetDataName')); };
 	if (typeof tagElement.attr('ROToolBoxGetDataGUID') != 'undefined') { $(MSID).attr('ROToolBoxGetDataGUID',tagElement.attr('ROToolBoxgetDataGUID')); };
@@ -817,13 +884,67 @@ function createAutoComplete(tag, tagElement) {
     var obs = new MutationObserver (function(mutations) {      
 		var invalidState = queryResults.find('div[data-control-type="checkboxGridByCriteriaOld"]').find('input#' + targetId).attr("aria-invalid");
 		if(typeof invalidState != 'undefined' && $('span#ac' + targetId + '_errorMsg').length < 1) {
+		if (!$('input#ac' + targetId).parent().parent().parent().hasClass("ng-hide")) {
 			$('input#ac' + targetId).parent().before('<span class="k-widget k-tooltip k-invalid-msg field-validation-error" id="ac' + targetId + '_errorMsg" role="alert"><span class="k-icon k-warning"></span> This is a required field.</span>');
+		}
 		} else if(typeof invalidState == 'undefined' && $('span#ac' + targetId + '_errorMsg').length > 0) {
         $('span#ac' + targetId + '_errorMsg').remove();
       }
     });
     obs.observe(document.querySelectorAll('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]')[0], {attributes: true, attributeFilter: ['aria-invalid'], childList: false, characterData: false, subtree:false});
 
+	// set attributes then observe for changes to show/hide class to set/remove required when displayed or hidden
+	if (ngshow != "") {
+		var hiddenState = $('div[ngsid="ng' + targetId + '"]');
+		if($(hiddenState).hasClass('ng-hide') == true) {
+			var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+			var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+			if ( $(cbGBC).attr('ngsr') == 'true' ) {
+				$(cbGBC).removeAttr('required');
+			}
+			if ( $(cbGBCO).attr('ngsr') == 'true' ) {
+				$(cbGBCO).removeAttr('required');
+			}
+		} else {
+			var unhiddenState = queryResults.find('div.row.custom-item-picker[ngsid="ng' + targetId + '"]');
+			if(typeof hiddenState != 'undefined') {
+				var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+				var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+				if ( $(cbGBC).attr('ngsr') == 'true') {
+					$(cbGBC).attr('required','true');
+				}
+				if ( $(cbGBCO).attr('ngsr') == 'true') {
+					$(cbGBCO).attr('required','true');
+				}
+			}
+		}
+		var obs2 = new MutationObserver (function(mutations) {      
+			var hiddenState = $('div[ngsid="ng' + targetId + '"]');
+			if($(hiddenState).hasClass('ng-hide') == true) {
+				var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+				var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+				if ( $(cbGBC).attr('ngsr') == 'true' ) {
+					$(cbGBC).removeAttr('required');
+				}
+				if ( $(cbGBCO).attr('ngsr') == 'true' ) {
+					$(cbGBCO).removeAttr('required');
+				}
+			} else {
+				var unhiddenState = queryResults.find('div.row.custom-item-picker[ngsid="ng' + targetId + '"]');
+				if(typeof hiddenState != 'undefined') {
+					var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+					var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+					if ( $(cbGBC).attr('ngsr') == 'true') {
+						$(cbGBC).attr('required','true');
+					}
+					if ( $(cbGBCO).attr('ngsr') == 'true') {
+						$(cbGBCO).attr('required','true');
+					}
+				}
+			}
+		});
+		obs2.observe(document.querySelectorAll('div.row.question-container[ngsid="ng' + targetId + '"]')[0], {attributes: true, attributeFilter: ['class'], childList: false, characterData: false, subtree:false});
+	}
 	
     // Process the data returned from the server and may the display columns into one string.
     function preprocessData(json) {
@@ -891,14 +1012,24 @@ function createAutoComplete(tag, tagElement) {
 						ROTBGetAddData = $(this).attr('ROToolBoxAddData');
 						if (typeof ROTBGetAddData != 'undefined') {
 							if (DataMergeResults.length > 0) {
-								var mdms = $("#ac" + targetId).data('kendoAutoSelect');
+								var mdms = $("#ac" + targetId).data('kendoAutoComplete');
 								for (var i = 0; i < DataMergeResults.length; i++) {
 									if ( ROTBGetAddData == 'All' || DataMergeResults[i].Name == ROTBGetAddData ) {
 										for (var y = 0; y < DataMergeResults[i].Data.length; y++) {
-											if (DataMergeResults[i].Data[y].DisplayName.toLowerCase().indexOf(mdms.input.val().toLowerCase()) > -1) {
+											if (DataMergeResults[i].Data[y].DisplayName.toLowerCase().indexOf(mdms.value().toLowerCase()) > -1) {
 												jd.Data.push({DisplayName: DataMergeResults[i].Data[y].DisplayName, BaseId: DataMergeResults[i].Data[y].BaseId});
 											}
 										}
+									}
+								}
+							}
+						}
+						ROTBPreventSelfSelect = $(this).parent().parent().parent().parent().attr('PreventSelfSelect');
+						if (typeof ROTBPreventSelfSelect != 'undefined') {
+							if (jd.Data.length > 0) {
+								for ( i = jd.Data.length - 1; i > -1; i-- ) {
+									if ( jd.Data[i].BaseId == session.user.Id ) {
+										jd.Data.splice( i, 1 );
 									}
 								}
 							}
@@ -926,7 +1057,7 @@ function createAutoComplete(tag, tagElement) {
 						}
 					}
 					// Add New named Data
-					var KMSselecteditems = $(this).data("kendoAutoSelect").dataItems();
+					var KMSselecteditems = $(this).data("kendoAutoComplete").dataItems();
 					if ( KMSselecteditems.length > 0 ) {
 						ROTBGetDataGUID = $(this).attr('ROToolBoxGetDataGUID')
 						for (var x = 0; x < KMSselecteditems.length; x++) {
@@ -977,12 +1108,11 @@ function createMultiSelect(tag, tagElement) {
     var userInput = tagElement.next();
     userInput.hide();
     var queryResults = userInput.next();
-    queryResults.hide();
     var groupElements = tagElement.add(userInput);
     groupElements = groupElements.add(queryResults);
     groupElements.wrapAll("<div class='row'><div class='col-md-12 col-xs-12'></div></div>");
 
-    // Get the definitions of the controls for the grid picker. We will use these to populate the auto complete control.
+    // Get the definitions of the controls for the grid picker. We will use these to populate the multiselect control.
     var targetEle = queryResults.find('div[data-control="checkboxGridByCriteriaOld"]');
     var targetId = targetEle.attr("data-control-valuetargetid");
     var valuefield = targetEle.attr("data-control-valuefield");
@@ -1057,19 +1187,43 @@ function createMultiSelect(tag, tagElement) {
 	
 	// combine preset Show/Hide Criteria
 	var ngshow = "";
-	if (typeof ngshow1 != 'undefined') { ngshow = createNgShow(ngshow, ngshow1, ngshowhide); }
-	if (typeof ngshow2 != 'undefined') { ngshow = createNgShow(ngshow, ngshow2, ngshowhide); }
-	if (typeof ngshow3 != 'undefined') { ngshow = createNgShow(ngshow, ngshow3, ngshowhide); }
-
-    // Add the HTML template for the @MultiSelect control, along with Combined Show/Hide Criteria if set
+	if (typeof ngshow1 != 'undefined') {
+			ngshow1 = modBoolCriteria(ngshow1);
+		ngshow = createNgShow(ngshow, ngshow1, ngshowhide);
+	}
+	if (typeof ngshow2 != 'undefined') {
+			ngshow2 = modBoolCriteria(ngshow2);
+		ngshow = createNgShow(ngshow, ngshow2, ngshowhide);
+	}
+	if (typeof ngshow3 != 'undefined') {
+			ngshow3 = modBoolCriteria(ngshow3);
+		ngshow = createNgShow(ngshow, ngshow3, ngshowhide);
+	}
+	
+	targetDiv = $(tagElement).next().next();
+	$(targetDiv).wrapInner("<div class='oldquery' style='Display: none' />");    // Add the HTML template for the @MultiSelect control, along with Combined Show/Hide Criteria if set
 	if (ngshow != "") {
 		ngshow = "(" + ngshow + ")";
-		var recompEle = queryResults.after('<div class="row custom-item-multipicker ng-hide" ng-show="' + ngshow + '" onhide style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<select id="ms' + targetId + '" style="width: 100%;" /></div></div>');
+		$(targetDiv).prepend('<div class="col-md-6 col-xs-12">' + controlLabel + '<select id="ms' + targetId + '" style="width: 100%;" /></div>');
+		$(targetDiv).parent().removeClass('question-container');
+		$(targetDiv).parent().addClass('custom-item-multipicker');
+		$(targetDiv).attr('ngsid', "ng" + targetId);
+		$(targetDiv).attr('ng-show', ngshow);
 		// recompile AngularElement if Required and able to
-		recompAngularElement(recompEle);
+		recompAngularElement(targetDiv);
+		var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] input[id="' + targetId + '"]');
+		if ( typeof $(cbGBC).attr('required') != 'undefined' ) {
+			$(cbGBC).attr('ngsr', 'true');
+		}
+		var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]');
+		if ( typeof $(cbGBCO).attr('required') != 'undefined' ) {
+			$(cbGBCO).attr('ngsr', 'true');
+		}
     } else {
-		queryResults.after('<div class="row custom-item-multipicker" style="margin-bottom:15px;"><div class="col-md-6 col-xs-12">' + controlLabel + '<select id="ms' + targetId + '" style="width: 100%;" /></div></div>');
-    }
+ 		$(targetDiv).prepend('<div class="col-md-6 col-xs-12">' + controlLabel + '<select id="ms' + targetId + '" style="width: 100%;" /></div>');
+		$(targetDiv).parent().removeClass('question-container');
+		$(targetDiv).parent().addClass('custom-item-multipicker');
+   }
 	
 	// Add Data Merge Attributes to Multiselect, so that they can be processed on typing and selection changes
 	var MSID = '#ms' + targetId;
@@ -1088,6 +1242,58 @@ function createMultiSelect(tag, tagElement) {
     });
     obs.observe(document.querySelectorAll('div[data-control-type="checkboxGridByCriteriaOld"] input[id="' + targetId + '"]')[0], {attributes: true, attributeFilter: ['aria-invalid'], childList: false, characterData: false, subtree:false});
 
+	// set attributes then observe for changes to show/hide class to set/remove required when displayed or hidden
+	if (ngshow != "") {
+		var hiddenState = $('div[ngsid="ng' + targetId + '"]');
+		if($(hiddenState).hasClass('ng-hide') == true) {
+			var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] select[id="' + targetId + '"]');
+			var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] select[id="' + targetId + '"]');
+			if ( $(cbGBC).attr('ngsr') == 'true' ) {
+				$(cbGBC).removeAttr('required');
+			}
+			if ( $(cbGBCO).attr('ngsr') == 'true' ) {
+				$(cbGBCO).removeAttr('required');
+			}
+		} else {
+			var unhiddenState = queryResults.find('div.row.custom-item-multipicker[ngsid="ng' + targetId + '"]');
+			if(typeof hiddenState != 'undefined') {
+				var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] select[id="' + targetId + '"]');
+				var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] select[id="' + targetId + '"]');
+				if ( $(cbGBC).attr('ngsr') == 'true') {
+					$(cbGBC).attr('required','true');
+				}
+				if ( $(cbGBCO).attr('ngsr') == 'true') {
+					$(cbGBCO).attr('required','true');
+				}
+			}
+		}
+		var obs2 = new MutationObserver (function(mutations) {      
+			var hiddenState = $('div[ngsid="ng' + targetId + '"]');
+			if($(hiddenState).hasClass('ng-hide') == true) {
+				var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] select[id="' + targetId + '"]');
+				var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] select[id="' + targetId + '"]');
+				if ( $(cbGBC).attr('ngsr') == 'true' ) {
+					$(cbGBC).removeAttr('required');
+				}
+				if ( $(cbGBCO).attr('ngsr') == 'true' ) {
+					$(cbGBCO).removeAttr('required');
+				}
+			} else {
+				var unhiddenState = queryResults.find('div.row.custom-item-multipicker[ngsid="ng' + targetId + '"]');
+				if(typeof hiddenState != 'undefined') {
+					var cbGBC = $('div[data-control-type="checkboxGridByCriteria"] select[id="' + targetId + '"]');
+					var cbGBCO = $('div[data-control-type="checkboxGridByCriteriaOld"] select[id="' + targetId + '"]');
+					if ( $(cbGBC).attr('ngsr') == 'true') {
+						$(cbGBC).attr('required','true');
+					}
+					if ( $(cbGBCO).attr('ngsr') == 'true') {
+						$(cbGBCO).attr('required','true');
+					}
+				}
+			}
+		});
+		obs2.observe(document.querySelectorAll('div.row.question-container[ngsid="ng' + targetId + '"]')[0], {attributes: true, attributeFilter: ['class'], childList: false, characterData: false, subtree:false});
+	}
     // Process the data returned from the server and map the display columns into one string.
     function preprocessData(json) {
         json.Data = $.map(json.Data, function(user, i) {
@@ -1119,9 +1325,11 @@ function createMultiSelect(tag, tagElement) {
         placeholder: controlHint,
         filtering: function(e) {
             var filter = e.filter;
-            if ((!filter.value) && (minLength > 0)) {
-                e.preventDefault();
-            }
+			if ( typeof filter != 'undefined') {
+				if ((!filter.value) && (minLength > 0)) {
+					e.preventDefault();
+				}
+			}
         },
         dataSource: new kendo.data.DataSource({
             type: "aspnetmvc-ajax",
@@ -1164,6 +1372,16 @@ function createMultiSelect(tag, tagElement) {
 												jd.Data.push({DisplayName: DataMergeResults[i].Data[y].DisplayName, BaseId: DataMergeResults[i].Data[y].BaseId});
 											}
 										}
+									}
+								}
+							}
+						}
+						ROTBPreventSelfSelect = $(this).attr('PreventSelfSelect');
+						if (typeof ROTBPreventSelfSelect != 'undefined') {
+							if (jd.Data.length > 0) {
+								for ( i = jd.Data.length - 1; i > -1; i-- ) {
+									if ( jd.Data[i].BaseId == session.user.Id ) {
+										jd.Data.splice( i, 1 );
 									}
 								}
 							}
