@@ -959,7 +959,9 @@ function createAutoComplete(tag, tagElement) {
             });
             return {
                 "DisplayName": append,
-                "BaseId": user.BaseId
+				"BaseId": user.BaseId,
+				"Id": user.Id,
+   				"ClassTypeId": user.ClassTypeId
             };
         });
         return json;
@@ -1040,12 +1042,37 @@ function createAutoComplete(tag, tagElement) {
                 data: "Data"
             }
         }),
-        select: function(e) {
-            var item = this.dataItem(e.item.index());
-            $("input[id='" + targetId + "']").each(function(i, el) {
-                $(el).val(item.BaseId);
-                $(el).change();
-            });
+        change: function(e) {
+            var newData = [];
+			if (multiselect === 'True') {
+				this.dataItems().forEach(function (val, index, arr) {
+					if (_.isUndefined(val.BaseId)) {
+						val.BaseId = !_.isUndefined(val.Id) ? val.Id : null;
+					}
+					newData.push(val);
+				});
+
+			} else {
+				var dataItem = this.dataItem();
+
+				if (_.isUndefined(dataItem.BaseId)) {
+					dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
+				}
+
+				newData.pop();
+				newData.push(dataItem);
+			}
+
+			var selectedItems = newData;
+			var selectedItemIds = _.pluck(selectedItems, "BaseId");
+			$("input[id='" + targetId + "']").each(function (i, el) {
+				$(el).val(selectedItemIds.join(','));
+				$(el).change();
+			});
+
+			var newDataJSON = [];
+			newDataJSON = selectedItems;
+			$('#Json' + targetId).val(JSON.stringify(newDataJSON));
 			//Process DataMerge functions to get data related to selected items and add to list to be added to other multiselect/autocomplete controls
             $("#ac" + targetId).each(function() {
 				ROTBGetDataName = $(this).attr('ROToolBoxGetDataName');
@@ -1307,7 +1334,9 @@ function createMultiSelect(tag, tagElement) {
             });
             return {
                 "DisplayName": append,
-                "BaseId": user.BaseId
+                "BaseId": user.BaseId,
+				"Id": user.Id,
+				"ClassTypeId": user.ClassTypeId
             };
         });
         return json;
@@ -1393,11 +1422,36 @@ function createMultiSelect(tag, tagElement) {
             }
         }),
         change: function(e) {
-            var selectedItems = this.value().join(",");
-            $("input[id='" + targetId + "']").each(function(i, el) {
-                $(el).val(selectedItems);
-                $(el).change();
-            });
+			var newData = [];
+			if (multiselect === 'True') {
+				this.dataItems().forEach(function (val, index, arr) {
+					if (_.isUndefined(val.BaseId)) {
+						val.BaseId = !_.isUndefined(val.Id) ? val.Id : null;
+					}
+					newData.push(val);
+				});
+
+			} else {
+				var dataItem = this.dataItem();
+
+				if (_.isUndefined(dataItem.BaseId)) {
+					dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
+				}
+
+				newData.pop();
+				newData.push(dataItem);
+			}
+
+			var selectedItems = newData;
+			var selectedItemIds = _.pluck(selectedItems, "BaseId");
+			$("input[id='" + targetId + "']").each(function (i, el) {
+				$(el).val(selectedItemIds.join(','));
+				$(el).change();
+			});
+
+			var newDataJSON = [];
+			newDataJSON = selectedItems;
+			$('#Json' + targetId).val(JSON.stringify(newDataJSON));
 			//Process DataMerge functions to get data related to selected items and add to list to be added to other multiselect/autocomplete controls
             $("#ms" + targetId).each(function() {
 				ROTBGetDataName = $(this).attr('ROToolBoxGetDataName');
