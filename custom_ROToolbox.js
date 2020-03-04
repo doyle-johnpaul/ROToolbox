@@ -1041,7 +1041,11 @@ function createAutoComplete(tag, tagElement) {
                },
                 data: "Data"
             }
-        }),
+		}),
+		select: function(e){
+			//underlines text in picker to show that an item was selected
+			e.sender.element[0].style.textDecoration = "underline";
+		},
         change: function(e) {
             var newData = [];
 			if (multiselect === 'True') {
@@ -1054,6 +1058,16 @@ function createAutoComplete(tag, tagElement) {
 
 			} else {
 				var dataItem = this.dataItem();
+
+				//clear underline on change 
+				(document.getElementById("ac"+targetId)).style.textDecoration = ""
+
+				//if clicking out of the autocomplete and there is only one item in the filtered list set it to the selected item and underline it
+				if(dataItem == undefined && this.dataSource._view.length == 1){
+					dataItem = this.dataSource._view[0];
+					(document.getElementById("ac"+targetId)).style.textDecoration = "underline"
+					this.value(this.dataSource._view[0].DisplayName);
+				}
 
 				if (_.isUndefined(dataItem.BaseId)) {
 					dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
