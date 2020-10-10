@@ -1073,6 +1073,9 @@ function createAutoComplete(tag, tagElement) {
 					if (_.isUndefined(dataItem.BaseId)) { 
 							dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
 					}
+				}else{
+					//clear input value if data isn't found
+					this.value("");
 				}	
 				
 				newData.pop();
