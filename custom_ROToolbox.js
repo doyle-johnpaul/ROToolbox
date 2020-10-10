@@ -1069,11 +1069,12 @@ function createAutoComplete(tag, tagElement) {
 					(document.getElementById("ac"+targetId)).style.textDecoration = "underline"
 					this.value(this.dataSource._view[0].DisplayName);
 				}
-
-				if (_.isUndefined(dataItem.BaseId)) {
-					dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
-				}
-
+				if(!_.isUndefined(dataItem)){
+					if (_.isUndefined(dataItem.BaseId)) { 
+							dataItem.BaseId = !_.isUndefined(dataItem.Id) ? dataItem.Id : null;
+					}
+				}	
+				
 				newData.pop();
 				newData.push(dataItem);
 			}
