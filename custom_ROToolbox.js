@@ -133,11 +133,11 @@
 		ItemTemplate: A template which is applied to the elements in the dropdown list. Note: if you need to include # symbols in the template which are not limiters for the data substitutions then they must be escaped with a double backslash \\
 		ValueTemplate: A template which is applied to the selected item. This is simply for display on the form. It is not saved as the input value.
 
-	@EnumFilter
+	@TopNode
 	-----------
 	This tag allows you to have an enum prompt start at a subvalue as opposed to the top level enum.
 	The following property is available:
-		FilterId: The Id of the Child Enum that the picker should start from. Exaple for the DisplayOnly prompt above the Enum Prompt: @EnumFilter {"FilterId": "8d57a980-9cdf-44e2-ec8a-c70e241d345b"}
+		FilterId: The Id of the Child Enum that the picker should start from. Exaple for the DisplayOnly prompt above the Enum Prompt: @TopNode {"FilterId": "8d57a980-9cdf-44e2-ec8a-c70e241d345b"}
 
 	@SingleLineEntry
 	----------------
