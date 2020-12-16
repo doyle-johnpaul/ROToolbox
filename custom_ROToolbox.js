@@ -12,6 +12,7 @@
    @DateRange: Converts two date inputs so that the date selected in the first is the minimum date which can be selected in the second.
    @Placeholder: Uses the provided string or the title of the following text control as a placeholder in that control.
    @AddClass: Adds a specified CSS class to the following control.
+   @TopNode: Allows an Enum Prompt to be filtered by a child value and only show children of the specified value
    
    Additional properties are added by adding a JSON string to the tag.
    e.g. to specify the minimum length for the autocomplete control, the tag is defined in the RO as @AutoComplete {"minLength":2}
@@ -131,6 +132,12 @@
 		Value: The field containing the value which will be submitted to the server.
 		ItemTemplate: A template which is applied to the elements in the dropdown list. Note: if you need to include # symbols in the template which are not limiters for the data substitutions then they must be escaped with a double backslash \\
 		ValueTemplate: A template which is applied to the selected item. This is simply for display on the form. It is not saved as the input value.
+
+	@TopNode
+	-----------
+	This tag allows you to have an enum prompt start at a subvalue as opposed to the top level enum.
+	The following property is available:
+		FilterId: The Id of the Child Enum that the picker should start from. Exaple for the DisplayOnly prompt above the Enum Prompt: @TopNode {"FilterId": "8d57a980-9cdf-44e2-ec8a-c70e241d345b"}
 
 	@SingleLineEntry
 	----------------
@@ -267,6 +274,11 @@ function transformRO() {
     $("p:contains('@QueryList')").parent().parent().each(function() {
 		buildQueryList("@QueryList", $(this))
 	});
+
+	$("p:contains('@TopNode')").parent().parent().each(function() {
+		buildTopNode("@TopNode", $(this));
+	});
+
     $("p:contains('@AddClass')").parent().parent().each(function() {
         addCssClass("@AddClass", $(this))
     });
@@ -466,6 +478,17 @@ function buildQueryList(tag, tagElement) {
 			(input.nodeName.toLowerCase() == "span") ? $(input).html(defaultValue) : $(input).val(defaultValue);
 		}
 	});
+};
+
+function buildTopNode(tag, tagElement) {
+	tagElement.hide();
+	var userDefined = parseOptions(tag, tagElement);
+	var elData = tagElement.next().find('[data-control="dropDownTree"]').data();
+	var picker = elData['kendoExtDropDownTreeViewV2'];
+	var originalId = picker.options.treeView.dataSource.options.transport.read.url.split('parentId=')[1];
+	picker.options.treeView.dataSource.options.transport.read.url = picker.options.treeView.dataSource.options.transport.read.url.replace(originalId, userDefined.FilterId);
+	elData['handler']._dropdown.dataSource.transport.options.read.url = elData['handler']._dropdown.dataSource.transport.options.read.url.replace(originalId, userDefined.FilterId);
+	picker.options.treeView.dataSource.read();
 };
 
 function customDatePicker(tag, tagElement) {
