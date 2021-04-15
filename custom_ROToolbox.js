@@ -282,6 +282,9 @@ function transformRO() {
     $("p:contains('@Layout')").parent().parent().each(function() {
         applyLayoutTemplate("@Layout", $(this))
     });
+	$("p:contains('@Hidden')").parent().parent().each(function() {
+        hidePrompt("@Hidden", $(this))
+    });
     app.lib.mask.remove();
 	app.events.publish('ROToolboxDone');
 }
@@ -308,6 +311,12 @@ function recompAngularElement(recompEle) {
 				$scope.$digest();
 		});
 	}
+}
+
+function hidePrompt(tag, tagElement) {
+    var target = tagElement.next();
+	$(target).hide();
+	tagElement.remove();
 }
 
 function addInformation(tag, tagElement) {
