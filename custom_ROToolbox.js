@@ -291,7 +291,8 @@ function transformRO() {
 
 function parseOptions(controlName, control) {
     var properties = "{}";
-    var regExp = /({[^}]+})/;
+    var rex = controlName + "(.*)";
+    var regExp = new RegExp(rex);
     var matches = regExp.exec(control.text());
     if (matches && matches[1])
         properties = matches[1];
