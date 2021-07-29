@@ -264,6 +264,9 @@ function transformRO() {
             createDateRange("@DateRange", $(this))
         });
     }
+	$("p:contains('@DateString')").closest(".row").each(function() {
+		customDateStringPicker("@DateString", $(this))
+        });
     $("p:contains('@QueryList')").parent().parent().each(function() {
 		buildQueryList("@QueryList", $(this))
 	});
@@ -475,6 +478,41 @@ function buildQueryList(tag, tagElement) {
 			(input.nodeName.toLowerCase() == "span") ? $(input).html(defaultValue) : $(input).val(defaultValue);
 		}
 	});
+};
+
+function customDateStringPicker(tag, tagElement) {
+	tagElement.hide();
+	var dateFormat = 'd';
+    var userDefined = parseOptions(tag, tagElement);
+	if (typeof userDefined.format != 'undefined') { dateFormat = userDefined.format;};
+	var textInputRow = tagElement.next();
+	var textInputType = textInputRow.find("input[value='String']");
+	if (textInputType.length == 0) {
+		tagElement.remove();
+		return;
+	}
+	var textInputId = textInputRow.find("input.question-answer-id").val();
+	textInputRow.find("textarea").hide();
+	
+	textInputRow.find(".col-md-6").addClass("col-md-4").removeClass("col-md-6");
+	
+	var newHtmlForDatePicker ="<input id='dateStringPicker_" + textInputId + "' style='width: 100%;' />";
+	textInputRow.find(".form-group").append(newHtmlForDatePicker);
+	
+	var updateDateStringInput = function ()  {
+		var that = this;
+		var textInputId = that.dateView.options.id.split("_").pop();
+		var input = $('#textArea' + textInputId);
+		var hiddenInput = $('#' + textInputId);
+		input.val(kendo.toString(that.value(), that.dateView.options.format));
+		hiddenInput.val(kendo.toString(that.value(), that.dateView.options.format));
+		input.change();
+	};
+
+	$("#dateStringPicker_" + textInputId).kendoDatePicker({
+                change: updateDateStringInput,
+				format: dateFormat
+            });
 };
 
 function customDatePicker(tag, tagElement) {
