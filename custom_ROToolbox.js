@@ -266,7 +266,10 @@ function transformRO() {
     }
 	$("p:contains('@DateString')").closest(".row").each(function() {
 		customDateStringPicker("@DateString", $(this))
-        });
+    });
+	$("p:contains('@CheckboxGroup')").closest(".row").each(function() {
+		customCheckBoxGroupPicker("@CheckboxGroup", $(this))
+	});
     $("p:contains('@QueryList')").parent().parent().each(function() {
 		buildQueryList("@QueryList", $(this))
 	});
@@ -514,6 +517,44 @@ function customDateStringPicker(tag, tagElement) {
 				format: dateFormat
             });
 };
+
+var updateCheckboxInput = function (id)  {
+	var hiddenInput = $('#' + id);
+	var hiddenDropdown = hiddenInput.parent().find("input[data-control='inlineComboBox']").getKendoDropDownList();
+	hiddenDropdown.select(1);
+	hiddenDropdown.trigger("change");
+	
+	hiddenInput.val(
+		$("input[name='"+ id + "']:checked").map(function(i,el){return el.value;}).get().join(";")
+	);
+	hiddenInput.change();	
+};
+
+function customCheckBoxGroupPicker (tag, tagElement) {
+	tagElement.hide();
+
+	var simpleListRow = tagElement.next();
+	var simpleListType = simpleListRow.find("input[value='List']");
+	if (simpleListType.length == 0) {
+		tagElement.remove();
+		return;
+	}
+
+	var simpleListId = simpleListRow.find("input.question-answer-id").val();
+	simpleListRow.find("span[role='listbox']").hide();
+	
+	simpleListRow.find(".col-md-6").addClass("col-md-12").removeClass("col-md-6");
+	
+	//Get the elements which will be displayed as options
+	var simpleListData = simpleListRow.find("span.k-widget.k-dropdown.k-header > input").attr("data-control-items").split("(((;)))");
+	
+	simpleListRow.find(".form-group").append("<fieldset></fieldset>");	
+	simpleListRow.find("fieldset").append(
+		$.map(simpleListData, function(v, i) {
+			return $("<div class='checkbox'><input type='checkbox' onclick='return updateCheckboxInput(\"" + simpleListId + "\");' name='" + simpleListId +"' id='" + i + "_" + simpleListId + "' value ='" + v + "' class='form-control'><label class='label-middle-align checkbox-inline checkbox-label' for='"  + i + "_" + simpleListId +  "'>" + v + "</label></div>");
+		})
+	);
+}
 
 function customDatePicker(tag, tagElement) {
 	tagElement.hide();
