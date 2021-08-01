@@ -518,6 +518,18 @@ function customDateStringPicker(tag, tagElement) {
             });
 };
 
+var updateCheckboxInput = function (id)  {
+	var hiddenInput = $('#' + id);
+	var hiddenDropdown = hiddenInput.parent().find("input[data-control='inlineComboBox']").getKendoDropDownList();
+	hiddenDropdown.select(1);
+	hiddenDropdown.trigger("change");
+	
+	hiddenInput.val(
+		$("input[name='"+ id + "']:checked").map(function(i,el){return el.value;}).get().join(";")
+	);
+	hiddenInput.change();	
+};
+
 function customCheckBoxGroupPicker (tag, tagElement) {
 	tagElement.hide();
 
@@ -536,24 +548,10 @@ function customCheckBoxGroupPicker (tag, tagElement) {
 	//Get the elements which will be displayed as options
 	var simpleListData = simpleListRow.find("span.k-widget.k-dropdown.k-header > input").attr("data-control-items").split("(((;)))");
 	
-	var updateInput = function (id)  {
-		console.log(id);
-	
-		var hiddenInput = $('#' + id);
-		var hiddenDropdown = hiddenInput.parent().find("input[data-control='inlineComboBox']").getKendoDropDownList();
-		hiddenDropdown.select(1);
-		hiddenDropdown.trigger("change");
-		
-		hiddenInput.val(
-			$("input[name='"+ id + "']:checked").map(function(i,el){return el.value;}).get().join(";")
-		);
-		hiddenInput.change();	
-	};
-	
 	simpleListRow.find(".form-group").append("<fieldset></fieldset>");	
 	simpleListRow.find("fieldset").append(
 		$.map(simpleListData, function(v, i) {
-			return $("<div class='checkbox'><input type='checkbox' onclick='return updateInput(\"" + simpleListId + "\");' name='" + simpleListId +"' id='" + i + "_" + simpleListId + "' value ='" + v + "' class='form-control'><label class='label-middle-align checkbox-inline checkbox-label' for='"  + i + "_" + simpleListId +  "'>" + v + "</label></div>");
+			return $("<div class='checkbox'><input type='checkbox' onclick='return updateCheckboxInput(\"" + simpleListId + "\");' name='" + simpleListId +"' id='" + i + "_" + simpleListId + "' value ='" + v + "' class='form-control'><label class='label-middle-align checkbox-inline checkbox-label' for='"  + i + "_" + simpleListId +  "'>" + v + "</label></div>");
 		})
 	);
 }
